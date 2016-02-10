@@ -1,7 +1,4 @@
 <?php
-if($_SERVER["HTTP_HOST"] != "www.adresboek.email"){
-    header("Location: http://www.adresboek.email/api/", true);
-}
 /**
  * Description of Curl
  * 
@@ -35,9 +32,9 @@ class Curl {
             curl_setopt(static::$curl, CURLOPT_SSL_VERIFYPEER, FALSE);
             curl_setopt(static::$curl, CURLOPT_SSL_VERIFYHOST, FALSE);            
             $res = curl_exec(static::$curl);
-            if(($json = json_decode($res, true)) == true){
+            if(($json = @json_decode($res, true)) == true){
                 return $json;
-            }elseif(($xml = simplexml_load_string($res)) == true){
+            }elseif(($xml = @simplexml_load_string($res)) == true){
                 return static::result_array($xml);
             }else{
                 return $res;
@@ -47,6 +44,81 @@ class Curl {
         return json_decode(json_encode((array)$q), true);
     }
     
+    /**
+     * Get Fitbit token
+     * @param type $url
+     * @param type $code
+     * @param type $parameters
+     * @return boolean
+     */
+    public static function AuthorizedPost($url = "", $credentials = "", $parameters = array()){
+        $opts = array(
+            'http'=>array(
+                'method' => "POST",
+                'header' => "Accept-language: en\r\n" .
+                            "Authorization: Basic {$credentials}\r\n" .
+                            "Content-type: application/x-www-form-urlencoded;charset=UTF-8\r\n",
+                'content' => ''
+            )
+        );
+        $content = "";                
+        foreach($parameters as $k => $v){
+            $content .= "&{$k}=".$v;
+        }
+        //Strip first & sign
+        $opts["http"]["content"] = substr($content, 1);
+        
+        $context = stream_context_create($opts);
+        
+        $fp = fopen($url, 'r', false, $context);
+        if(($data = fgets($fp)) !== false){
+            return json_decode($data, true);
+        }else{
+            return false;
+        }
+    }
+    
+    /**
+     * Fitbit GET
+     * @param type $url
+     * @param type $credentials
+     * @param type $parameters
+     * @return boolean
+     */
+    public static function FitBitGet($url = "", $credentials = "", $parameters = array()){
+        $opts = array(
+            'http'=>array(
+                'method' => "GET",
+                'header' => "Accept-language: en\r\n" .
+                            "Authorization: Bearer {$credentials}\r\n" .
+                            "Content-type: application/x-www-form-urlencoded;charset=UTF-8\r\n",
+                'content' => ''
+            )
+        );
+        $content = "";                
+        foreach($parameters as $k => $v){
+            $content .= "&{$k}=".$v;
+        }
+        //Strip first & sign
+        $opts["http"]["content"] = substr($content, 1);
+        
+        $context = stream_context_create($opts);
+        
+        $fp = fopen($url, 'r', false, $context);
+        if(($data = fgets($fp)) !== false){
+            return json_decode($data, true);
+        }else{
+            return false;
+        }
+    }
+    
+    /**
+     * Get Token for Twitter
+     * @param type $url
+     * @param type $parameters
+     * @param type $credentials
+     * @return boolean
+     */
     public static function TwitterPost($url = "", $parameters = "", $credentials = ""){
         $opts = array(
             'http'=>array(

@@ -22,9 +22,9 @@ Redirect::To($url);
 require_once(getcwd()."/Auth2Class.php");
 
 $settings = new oAuth2Settings();
-$settings->client_id = 642821282413842;
-$settings->client_secret = "bbd7fc52436f1b5d9a754c71b43f583d";
-$settings->redirect_uri = "http://www.adresboek.email/api/facebook.php";
+$settings->client_id = 1704229076527706;
+$settings->client_secret = "432848fa117bb630351bf72939bda69e";
+$settings->redirect_uri = "https://www.thecodingcompany.se/oauth2/facebook.php";
 
 ini_set('display_errors', 1);
 $oauth = new oAuth2Validate();

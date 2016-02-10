@@ -37,17 +37,72 @@ class oAuth2Validate {
     }
     
     /**
+     * Authenticate with FitBit
+     * @param oAuth2Settings $settings
+     */
+    public function FitBit(oAuth2Settings $settings){
+        
+        if($settings !== null || $this->settings !== null){
+            
+            $settings = ($this->settings == null ? $settings : $this->settings);
+            
+            //Step 1. Get the the secret code from FitBit and let the user authenticate our app.    
+            if(!isset($_GET["code"]) && !isset($_GET["token"])){
+                
+                //Prepare URL
+                $url = "https://www.fitbit.com/oauth2/authorize?response_type=code&client_id={$settings->client_id}&"
+                . "redirect_uri={$settings->redirect_uri}&scope=activity%20nutrition%20heartrate%20location%20nutrition%20profile%20settings%20sleep%20social%20weight";
+                Redirect::To($url);
+            }
+            
+            //Step 2. Get our access_token with the secret code we received from Facebook
+            if(isset($_GET['code']) && $_GET['code'] != ""){
+                
+                $url = "https://api.fitbit.com/oauth2/token?";
+                
+                $res = Curl::AuthorizedPost($url, base64_encode($settings->client_id.":".$settings->client_secret), array(
+                    "client_id"     => $settings->client_id,
+                    "grant_type"    => "authorization_code",
+                    "redirect_uri"  => $settings->redirect_uri,
+                    "code"          => $_GET["code"]
+                ));
+                
+                if(isset($res["access_token"]) && $res["access_token"] != ""){
+                    Redirect::To(urldecode($settings->redirect_uri)."?token={$res["access_token"]}");
+                }      
+                
+            }elseif(isset($_GET['token']) && $_GET['token'] != ""){
+
+                //Get user profile
+                $url = "https://api.fitbit.com/1/user/-/profile.json";
+                $res = Curl::FitBitGet($url, $_GET['token']);
+                
+                echo "<pre>";
+                print_r($res);
+            }
+            
+        }else{
+            echo "No settingsobject found.<br/>";
+        }
+    }
+    
+    /**
      * Authenticate user through Facebook
      * @param oAuth2Settings $settings
      */
     public function Facebook(oAuth2Settings $settings){
         if($settings !== null || $this->settings !== null){
+            
+            //
             $settings = ($this->settings == null ? $settings : $this->settings);
             
             //Step 1. Get the the secret code from facebook and let the user authenticate our app.            
             if(!isset($_GET["code"]) && !isset($_GET["token"])){
+                
+                //Prepare URL
                 $url = "https://graph.facebook.com/oauth/authorize?client_id={$settings->client_id}&"
                 . "redirect_uri={$settings->redirect_uri}";
+                
                 Redirect::To($url);
             }
                 
@@ -55,12 +110,17 @@ class oAuth2Validate {
             if(isset($_GET['code']) && $_GET['code'] != ""){
     
                 $url = "https://graph.facebook.com/oauth/access_token?";
-                $res = Curl::Post($url, "code={$_GET['code']}&redirect_uri={$settings->redirect_uri}&"
-                . "client_id={$settings->client_id}&client_secret={$settings->client_secret}");
-
-                parse_str($res);
-
-                if(isset($access_token) && $access_token != ""){
+                $url .= "client_id={$settings->client_id}&client_secret={$settings->client_secret}&code={$_GET["code"]}&redirect_uri={$settings->redirect_uri}";
+                
+                $data = Curl::Get($url);
+                if(!is_array($data) && !is_object($data)){
+                    parse_str($data);
+                }else{
+                    echo "<pre>".print_r($data, true)."</pre>";
+                    die();
+                }
+                
+                if(isset($access_token) && $access_token !== ""){
                     Redirect::To(urldecode($settings->redirect_uri)."?token={$access_token}");
                 }
 
