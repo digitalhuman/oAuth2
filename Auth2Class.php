@@ -75,7 +75,7 @@ class oAuth2Validate {
 
                 //Get user profile
                 $url = "https://api.fitbit.com/1/user/-/profile.json";
-                $res = Curl::FitBitGet($url, $_GET['token']);
+                $res = Curl::AuthorizedGet($url, $_GET['token']);
                 
                 echo "<pre>";
                 print_r($res);
@@ -286,20 +286,132 @@ class oAuth2Validate {
      * @todo Login with Twitter
      */
     public function Twitter(oAuth2Settings $settings){
+        @session_start();
         if($settings !== null || $this->settings !== null){
-            $settings = ($this->settings == null ? $settings : $this->settings);
             
-//                $output = "";
-//                
-//                $oauth_nonce = md5(rand(1,2342352342));                
-//                $url = "https://api.twitter.com/oauth2/token";
-//                
-//                $application_key = base64_encode(urlencode($settings->consumer_key).":".urlencode($settings->consumer_secret));
-//
-//                $req = Curl::TwitterPost($url, $output, $application_key);
-//                if(isset($req['access_token'])){
-//                    
-//                }
+            $settings = ($this->settings == null ? $settings : $this->settings);
+
+            //Step 1: Obtaining a request consumer token
+            //GET oauth / request_token.
+            if(!isset($_GET["oauth_verifier"]) && !isset($_GET["oauth_token"])){
+                
+                //Parameters
+                $parameters = array(
+                    "oauth_consumer_key"        => $settings->client_id,
+                    "oauth_nonce"               => md5(time()),
+                    "oauth_signature_method"    => "HMAC-SHA1",
+                    "oauth_timestamp"           => time(),
+                    "oauth_version"             => "1.0"
+                );
+
+                //Sort parameters alphabetically on Keys again
+                ksort($parameters);
+
+                $parameter_string = http_build_query($parameters);
+
+                $sign_string = "GET&";
+                $sign_string .= oAuth2Validate::urlencode_rfc3986("https://api.twitter.com/oauth/request_token")."&";
+                $sign_string .= oAuth2Validate::urlencode_rfc3986($parameter_string);
+
+                echo "<p>Signature base:<br/>{$sign_string}</p>";
+
+                //Create the signkey. Since we don't have the consumer token yet we put NULL here.
+                $oauth_sign_key = oAuth2Validate::urlencode_rfc3986($settings->client_secret)."&";
+                echo "<p>Sign key:<br/>{$oauth_sign_key}</p>";
+
+                //Create the signature
+                $parameters["oauth_signature"] = base64_encode(hash_hmac("sha1", $sign_string, $oauth_sign_key, true));
+                echo "<p>Signature:<br/>{$parameters["oauth_signature"]}</p>";
+
+                //Sort parameters alphabetically on Keys again
+                ksort($parameters);
+
+                //Build oAuth2 header
+                $post_header = "";
+                foreach($parameters as $k => $v){
+                    $post_header .= oAuth2Validate::urlencode_rfc3986($k)."=\"".oAuth2Validate::urlencode_rfc3986($v)."\",";
+                }
+                $post_header = substr($post_header, 0, -1); //Strip last space and ,
+
+                //Create the header
+                $headers = array("Authorization: OAuth ". $post_header); 
+
+                $ch = curl_init();
+                curl_setopt($ch, CURLOPT_URL, "https://api.twitter.com/oauth/request_token");
+                curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);                    
+                $result = curl_exec($ch);
+                curl_close($ch);  
+                
+                //Check if we have all keys and values
+                //Step 2: Redirect to Twitter for the authentication and permissions
+                parse_str($result, $args);
+                if(isset($args["oauth_token"]) && isset($args["oauth_token_secret"])){
+                    
+                    //Save for later use
+                    $_SESSION["twitter"] = $args;
+                    Redirect::To("https://api.twitter.com/oauth/authenticate?oauth_token={$args["oauth_token"]}");
+                }
+            }
+            
+            //Step 3. Exchange Request token for Access Token
+            if(isset($_GET["oauth_verifier"]) && isset($_GET["oauth_token"])){
+                
+                //Parameters
+                $parameters = array(
+                    "oauth_consumer_key"        => $settings->client_id,
+                    "oauth_nonce"               => md5(time()),
+                    "oauth_signature_method"    => "HMAC-SHA1",
+                    "oauth_timestamp"           => time(),
+                    "oauth_version"             => "1.0",
+                    "oauth_token"               => $_GET["oauth_token"] //Request token received from Twitter in step 2
+                );
+
+                //Sort parameters alphabetically on Keys again
+                ksort($parameters);
+
+                $parameter_string = http_build_query($parameters);
+
+                $sign_string = "GET&";
+                $sign_string .= oAuth2Validate::urlencode_rfc3986("https://api.twitter.com/oauth/access_token")."&";
+                $sign_string .= oAuth2Validate::urlencode_rfc3986($parameter_string);
+
+                //Create the signkey. Since we don't have the consumer token yet we put NULL here.
+                $oauth_sign_key = oAuth2Validate::urlencode_rfc3986($settings->client_secret)."&";
+
+                //Create the signature
+                $parameters["oauth_signature"] = base64_encode(hash_hmac("sha1", $sign_string, $oauth_sign_key, true));
+
+                //Sort parameters alphabetically on Keys again
+                ksort($parameters);
+
+                //Build oAuth2 header
+                $post_header = "";
+                foreach($parameters as $k => $v){
+                    $post_header .= oAuth2Validate::urlencode_rfc3986($k)."=\"".oAuth2Validate::urlencode_rfc3986($v)."\",";
+                }
+                $post_header = substr($post_header, 0, -1); //Strip last space and ,
+
+                //Create the header
+                $headers = array("Authorization: OAuth ". $post_header); 
+
+                $ch = curl_init();
+                curl_setopt($ch, CURLOPT_URL, "https://api.twitter.com/oauth/access_token?oauth_verifier={$_GET["oauth_verifier"]}");
+                curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
+                $result = curl_exec($ch);
+                curl_close($ch);
+                
+                //Check if we have all keys and values
+                parse_str($result, $args);
+                if(isset($args["oauth_token"]) && isset($args["oauth_token_secret"]) && isset($args["user_id"])){
+                    
+                    //Save for later use
+                    $_SESSION["twitter"] = array_merge($_SESSION["twitter"], $args);
+                    print_r($_SESSION);
+                    die();
+                }
+            }
         }
     }
     
@@ -313,6 +425,23 @@ class oAuth2Validate {
             
             
 
+        }
+    }
+    
+    /**
+     * URL Encode RFC9686
+     * @param type $input
+     * @return string
+     */
+    public static function urlencode_rfc3986($input) {
+        if(is_array($input)){
+            return array_map(array('Auth2Class', 'urlencode_rfc3986'), $input);
+        }else if(is_scalar($input)) {
+            return str_replace(
+                '+', ' ', str_replace('%7E', '~', rawurlencode($input))
+            );
+        }else{
+            return '';
         }
     }
 }

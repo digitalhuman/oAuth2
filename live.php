@@ -9,8 +9,8 @@
 require_once(getcwd()."/Auth2Class.php");
 
 $settings = new oAuth2Settings();
-$settings->client_id = "0000000040127B4F";
-$settings->redirect_uri = "http://www.adresboek.email/api/live.php";
+$settings->client_id = "";
+$settings->redirect_uri = "https://www.thecodingcompany.se/oauth2/live.php";
 
 ini_set('display_errors', 1);
 $oauth = new oAuth2Validate();
